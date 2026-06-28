@@ -1,11 +1,10 @@
-// WARNING: as it stands, this whole page is wide open. Type /admin in the URL
-// bar while logged out (or as a normal USER) and you can read all of it. None of
-// the people below are real, but the point stands: this is back office content
-// that only an ADMIN should ever see.
-//
-// Your job: protect this route AND gate it behind the "ADMIN" role, so a normal
-// user gets an "Access Denied" message instead of the panel.
+import ProtectedRoute from "@/components/ProtectedRoute";
 
+// WARNING: as it stood before this lab, this whole page was wide open.
+// Now it's wrapped in <ProtectedRoute requiredRole="ADMIN">, which means:
+//  - logged out               -> redirected to /login
+//  - logged in, role !== ADMIN -> "Access Denied" screen, panel never renders
+//  - logged in, role === ADMIN -> the panel below
 const FAKE_USERS = [
   { id: 1, name: "Demo User", email: "demo@ironhack.com", role: "USER" },
   { id: 2, name: "Ada Admin", email: "admin@ironhack.com", role: "ADMIN" },
@@ -13,14 +12,13 @@ const FAKE_USERS = [
   { id: 4, name: "Linus T.", email: "linus@ironhack.com", role: "USER" },
 ];
 
-export default function AdminPage() {
+function AdminPanel() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
       <h1 className="text-3xl font-bold text-slate-900">Admin Panel</h1>
       <p className="mt-1 text-slate-600">
         Manage users, settings, and the dangerous buttons.
       </p>
-
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <p className="text-sm text-slate-500">Total users</p>
@@ -35,7 +33,6 @@ export default function AdminPage() {
           <p className="mt-1 text-3xl font-bold text-slate-900">7</p>
         </div>
       </div>
-
       <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-500">
@@ -60,7 +57,6 @@ export default function AdminPage() {
           </tbody>
         </table>
       </div>
-
       <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-6">
         <h2 className="font-semibold text-red-700">Danger Zone</h2>
         <p className="mt-1 text-sm text-red-600">
@@ -72,5 +68,13 @@ export default function AdminPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <ProtectedRoute requiredRole="ADMIN">
+      <AdminPanel />
+    </ProtectedRoute>
   );
 }

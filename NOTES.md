@@ -1,44 +1,82 @@
-# Design log
+# Notes — Protected Routes Lab
 
-We grade the *thinking*, not the length. Short, honest answers beat padding.
-Write these as you build, not at the end.
+## The decision point: Option A vs Option B
 
----
+I went with **Option B** — gave `ProtectedRoute` a `requiredRole` prop instead
+of checking the role inside `app/admin/page.js` directly.
 
-## 1. The role check: which option did you pick?
+```jsx
+<ProtectedRoute requiredRole="ADMIN">
+  <AdminPanel />
+</ProtectedRoute>
+```
 
-In step 4 you chose between checking the role inside the admin page (Option A) or
-teaching `ProtectedRoute` a `requiredRole` prop (Option B). Which one did you
-pick, and why? What would make you switch to the other one?
+**Why:**
 
-_your answer_
+- The rule "who is allowed to see this page" is a policy decision, not page
+  content. It belongs in one place, not copy-pasted into every page that
+  needs a role check.
+- If PostHub grew to ten admin-only pages, Option A means writing the same
+  `user.role === "ADMIN" ? ... : <AccessDenied />` ternary ten times. The day
+  someone forgets it on page #7, that page is silently wide open to any
+  logged-in user — and nothing fails loudly to catch the mistake.
+- With Option B, a protected-and-gated page is always one line:
+  `<ProtectedRoute requiredRole="X">`. There's no way to "forget" the check,
+  because the check lives in the wrapper everyone already has to use anyway.
 
-## 2. The flash problem
+**Tradeoff I'm accepting:**
 
-There is a moment when the page first loads where the user *looks* logged out
-even though they have a valid session cookie. Where does that moment come from, and what
-in your `ProtectedRoute` prevents the user from seeing the wrong thing during it?
-(Mention both the spinner and the `return null`.)
+- `ProtectedRoute` now has to know about specific role strings, which is one
+  more thing for someone to understand when reading it for the first time.
+  Option A keeps the logic visible exactly where it's used, which is more
+  readable for a single page in a small app.
+- For *this* app (one admin page), Option A would honestly be simpler and
+  just as correct. I chose B because the prompt explicitly asks "what would
+  you want if this grew to ten admin pages," and B is the answer that scales
+  without a forgettable manual step.
 
-_your answer_
+## Other implementation notes
 
-## 3. Gating the delete button
+- `ProtectedRoute` waits for `loading` to resolve before deciding whether to
+  redirect. Redirecting while `loading` is still `true` would kick out users
+  who are actually logged in, just because `/me` hasn't come back yet.
+- The role gate (`requiredRole`) is a **render decision**, not a redirect.
+  A logged-in `USER` who hits `/admin` stays on `/admin` and sees
+  "Access Denied" inline — they don't get bounced to `/login`, since they
+  *are* authenticated, just not authorized for this page. Conflating those
+  two would be confusing (it would look like login failed).
+- In every "not yet allowed" branch, `ProtectedRoute` returns `null` instead
+  of `children`, so there's no flash of protected content before the
+  redirect or denial kicks in.
 
-How did you decide whether to show the delete button? Where does that decision
-live, and what does a normal `USER` actually see in the markup?
+## Bugs hit while building this (and the actual cause)
 
-_your answer_
+- **Login failing with "wrong email or password, or backend not running"**
+  even with correct credentials — actual cause was a frontend/backend port
+  mismatch (`NEXT_PUBLIC_API_URL` pointing at the wrong port), not bad
+  credentials. The error message conflates network failures with auth
+  failures, which is worth remembering as a debugging trap for next time.
+- **Admin login working but role check still failing** — the original
+  `DataSeeder.java` had a single early `return` guarding *both* seed users,
+  keyed off whether `demo@ironhack.com` already existed. Once demo existed,
+  the seeder returned before ever reaching the admin block, so the admin
+  user never got created. Fixed by giving each user its own independent
+  `existsByEmail` check instead of one shared early exit.
+- **CORS mismatch after changing the frontend's port** — Spring's
+  `corsConfigurationSource()` only allows `http://localhost:3000` as an
+  origin. Running the frontend on a different port (e.g. 3001) gets
+  silently blocked by CORS even though `credentials: "include"` is set
+  correctly on the frontend. Kept both servers on the README's default
+  ports (`8080` backend, `3000` frontend) to avoid this entirely.
 
-## 4. The navbar in each state
+## Verified against the checklist
 
-Describe what the navbar renders in each of these cases: logged out, logged in as
-a `USER`, logged in as an `ADMIN`. What single value drives the difference?
-
-_your answer_
-
-## 5. If I had another hour
-
-What would you add or clean up next? (Redirect after login, active link
-highlighting, real delete against a backend, nicer access-denied page...)
-
-_your answer_
+- [x] Logged-out user visiting `/posts` → redirected to `/login`
+- [x] Logged-out user visiting `/admin` → redirected to `/login`
+- [x] Logged-in `USER` visiting `/admin` → "Access Denied", panel never renders
+- [x] Logged-in `ADMIN` visiting `/admin` → full panel
+- [x] Navbar shows name + role + Sign Out when logged in
+- [x] Navbar shows Login when logged out
+- [x] Delete button: admin-only, removes post from local state on click
+- [x] No flash of protected content before redirect
+- [x] No console errors
